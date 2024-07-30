@@ -1,0 +1,29 @@
+<div
+  id="table-container"
+  style="
+    max-width: 100%;
+    max-height: 100%;
+    scrollbar-width: thin;
+    overflow-y: auto;
+  "
+>
+  {% if columns %}
+  <table
+    id="dataTable"
+    class="table table-striped display nowrap"
+    cellspacing="0"
+    width="100%"
+    style="max-width: 100%"
+  >
+    <thead>
+      <tr>
+        {% for column in columns %}
+        <th>{{ column }}</th>
+        {% endfor %}
+      </tr>
+    </thead>
+  </table>
+  {% else %}
+  <p>No data available. Please upload an Excel file or select a table.</p>
+  {% endif %}
+</div>

@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Excel Data Viewer</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/twitter-bootstrap/5.3.0/css/bootstrap.min.css" rel="stylesheet">    
+    <link href="/static/datatables.min.css" rel="stylesheet">
+    <script src="/static/datatables.min.js"></script>
+    <script src="https://unpkg.com/htmx.org@2.0.1"></script>
+    <style>     
+        .row {
+            max-width: 100%;
+        }
+        .container {
+            max-width: 100vw;
+            max-height: 100vh;            
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            scrollbar-width: thin;
+        }   
+        .sticky-header {                        
+            background-color: white;
+            width: 100%;
+        }
+        .input-group {
+            display: flex;
+            align-items: center;
+        }        
+        .dtr-details {
+            min-width: 100%;
+        }
+        .boolean-true {
+            background-color: green;
+            color: white;
+        }
+        .boolean-false {
+            background-color: red;
+            color: white;
+        }
+    </style>
+</head>
+<body>
+    <div class="container px-3 py-2 mx-0">
+        <div class="sticky-header mt-1">
+            <div class="d-flex">
+                <h1 class="mb-2">Excel Data Viewer</h1>                
+            </div>                                    
+            <form hx-post="/upload/" hx-target="#table-container" hx-swap="outerHTML" enctype="multipart/form-data" class="mb-2">
+                <div class="input-group">
+                    <input type="file" class="form-control" name="file" id="upload" accept=".xlsx,.xls" required>
+                    <button class="btn btn-primary" id="submit">Upload</button>
+                </div>
+            </form>
+
+            {% if table_names %}
+            <div class="mb-2">
+                <label for="table-select" class="form-label">Select Table:</label>
+                <select id="table-select" class="form-select" hx-get="/table" hx-target="#table-container" hx-include="[name=table]" hx-swap="outerHTML">
+                    <option value="">Select a table</option>
+                    {% for table_name in table_names %}
+                    <option value="{{ table_name }}" {% if selected_table == table_name %}selected{% endif %}>{{ table_name }}</option>
+                    {% endfor %}
+                </select>
+                <input type="hidden" name="table" id="selected-table" value="">
+            </div>
+            {% endif %}
+        </div>
+        <div id="table-container"></div>
+    </div>
+    <script>    
+    let dataTable;
+    async function initTable(selectedTable){
+        const response = await fetch(`/table-data?table=${selectedTable}`);
+            const result = await response.json();            
+
+            if (result.error) {
+                console.error(result.error);
+                return;
+            }
+
+            const columns = result.columns.map((col, index) => ({ title: col, data: col, targets: index }));
+            const data = result.data;
+
+            if (dataTable) {
+                dataTable.clear();
+                dataTable.destroy();
+            }
+            
+            DataTable.Buttons.defaults.dom.button.className = 'btn btn-light';
+
+            dataTable = $('#dataTable').DataTable({
+                data: data,
+                columns: [
+                    {
+                        data: null,
+                        defaultContent: '',
+                        className: 'control',
+                        orderable: false,
+                        title: 'expand'
+                    },
+                    ...columns
+                ],
+                responsive: true,
+                colReorder: true,                
+                fixedHeader: true,
+                searchBuilder: true,                
+                layout: {
+                    topStart: {                    
+                        buttons: [                                                        
+                            'pageLength',
+                            'searchBuilder',
+                            {
+                                extend: 'colvis',
+                                columns: 'th:nth-child(n+2)'
+                            },
+                            {
+                                extend: 'excelHtml5',
+                                img: '/static/excel.png',
+                                titleAttr: 'Export to Excel'
+                            },
+                        ]
+                    }
+                },
+                select: {
+                    style: 'os',
+                    selector: 'td.dt-select'
+                }
+            });      
+    }
+
+    async function uploadFile(event) {
+        event.preventDefault();
+        const fileInput = document.getElementById('upload');
+        const formData = new FormData();
+        formData.append('file', fileInput.files[0]);
+        const response = await fetch('/upload/', {
+            method: 'POST',
+            body: formData,
+        });
+
+        if (response.ok) {
+            const html = await response.text();
+            document.getElementById('table-container').outerHTML = html;
+            htmx.process(document.getElementById('table-container'));
+            tableName = fileInput.files[0].name.split('.')[0].replaceAll(' ', '_').toLowerCase();
+            await initTable(tableName)
+            const optionList = document.getElementById('table-select');
+            const newOption = document.createElement('option');
+            newOption.value = tableName;
+            newOption.text = tableName;
+            optionList.appendChild(newOption);
+            optionList.value = tableName;
+        }
+    }
+
+    document.getElementById('submit').addEventListener('click', uploadFile);
+
+    document.getElementById('table-select').addEventListener('change', function() {
+        document.getElementById('selected-table').value = this.value;
+    });
+
+    document.getElementById('table-select').addEventListener('change', async function() {
+        const selectedTable = this.value;            
+
+        if (!selectedTable) { return; }
+
+        initTable(selectedTable);                  
+    }); 
+</script>
+</body>
+</html>
